@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mini Royale — Single-file Prototype</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#071427; --accent:#61dafb; --card:#0f1b2a;
+    --ally:#8fd3a3; --enemy:#ff9b9b; --tower:#f2d974;
+  }
+  *{box-sizing:border-box;font-family:Inter,system-ui,Arial;user-select:none}
+  body{margin:0;background:linear-gradient(180deg,#071926,#071428);color:#e6f2ff}
+  .wrap{max-width:980px;margin:18px auto;padding:12px}
+  header{display:flex;align-items:center;gap:12px}
+  h1{margin:0;font-size:20px}
+  .arena{margin-top:12px;background:linear-gradient(180deg,#0b2635,#07212b);border-radius:10px;padding:12px;display:grid;grid-template-columns:1fr 260px;gap:12px;min-height:540px}
+  #board{position:relative;background:linear-gradient(180deg,#0c2a36,#04202a);border-radius:8px;overflow:hidden;padding:8px}
+  /* lanes & ground */
+  .ground{position:absolute;left:0;right:0;bottom:0;height:110px;background:linear-gradient(180deg,#0f3a2f,#08221a);border-top-left-radius:8px;border-top-right-radius:8px;opacity:0.6}
+  .lane{position:absolute;left:0;right:0;top:0;bottom:110px;display:flex;align-items:center;justify-content:space-between;padding:40px}
+  /* towers */
+  .tower{width:120px;height:160px;border-radius:10px;background:var(--tower);display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.6);font-weight:700;color:#222}
+  .tower small{display:block;margin-top:8px;font-weight:600;color:#222}
+  /* unit */
+  .unit{position:absolute;bottom:120px;width:56px;height:56px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700}
+  .ally{background:linear-gradient(180deg,#a7f3bf,#34d399);border:2px solid rgba(0,0,0,.15);color:#043018}
+  .enemy{background:linear-gradient(180deg,#ffb4b4,#ff7b7b);border:2px solid rgba(0,0,0,.15);color:#3b0202}
+  .hpbar{position:absolute;bottom:180px;height:8px;border-radius:6px;background:#222;overflow:hidden;width:56px}
+  .hpbar > i{display:block;height:100%;background:linear-gradient(90deg,#7ef3c7,#34d399);width:100%}
+  /* right panel */
+  .panel{background:var(--panel);padding:12px;border-radius:8px}
+  .stats{display:flex;gap:8px;justify-content:space-between;align-items:center}
+  .big{font-size:20px;font-weight:700}
+  .cards{display:flex;gap:8px;margin-top:12px}
+  .card{width:100%;background:var(--card);border-radius:8px;padding:10px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;border:1px solid rgba(255,255,255,.03)}
+  .card.disabled{opacity:.45;pointer-events:none}
+  .elixirBar{height:12px;border-radius:8px;background:#0c2a35;margin-top:8px;overflow:hidden}
+  .elixirBar > i{height:100%;background:linear-gradient(90deg,#bde9ff,#61dafb);width:0%}
+  .footer{display:flex;gap:8px;align-items:center;margin-top:12px;justify-content:space-between}
+  button{background:transparent;border:1px solid rgba(255,255,255,.06);color:var(--accent);padding:8px 10px;border-radius:8px;cursor:pointer}
+  .center{display:flex;align-items:center;justify-content:center}
+  .muted{color:#9fb3c8;font-size:13px}
+  /* small screens */
+  @media (max-width:880px){
+    .arena{grid-template-columns:1fr;min-height:720px}
+    #board{order:2;height:520px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Mini Royale — Prototype</h1>
+    <div class="muted">A simplified Clash Royale-like prototype (single-file)</div>
+  </header>
+
+  <div class="arena">
+    <div id="board" class="panel">
+      <!-- left tower -->
+      <div id="leftTower" class="tower" style="position:absolute;left:12px;top:60px">
+        <div>ALLY TOWER</div>
+        <small id="leftHp">HP 1500</small>
+      </div>
+
+      <!-- right tower -->
+      <div id="rightTower" class="tower" style="position:absolute;right:12px;top:60px">
+        <div>ENEMY TOWER</div>
+        <small id="rightHp">HP 1500</small>
+      </div>
+
+      <!-- midlane markers -->
+      <div class="lane">
+        <div style="opacity:.06">LEFT</div>
+        <div style="opacity:.06">RIGHT</div>
+      </div>
+
+      <div id="unitsContainer"></div>
+      <div class="ground"></div>
+    </div>
+
+    <div class="panel">
+      <div class="stats">
+        <div>
+          <div class="muted">Elixir</div>
+          <div id="elixirText" class="big">0 / 10</div>
+        </div>
+        <div>
+          <div class="muted">Time</div>
+          <div id="timer" class="big">3:00</div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="muted">Your Cards</div>
+        <div class="cards" id="cards"></div>
+        <div class="elixirBar" style="margin-top:8px"><i id="elixirBarFill" style="width:0%"></i></div>
+      </div>
+
+      <div class="footer">
+        <div class="muted">Deploy units by clicking a card then clicking the board</div>
+        <div><button id="restartBtn">Restart</button></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="muted">Game Log</div>
+        <div id="log" style="height:160px;overflow:auto;background:rgba(0,0,0,.08);padding:6px;border-radius:6px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ------------------ Game config ------------------ */
+const CONFIG = {
+  boardWidth: 900, // visual reference for spawn coordinates
+  elixirMax: 10,
+  elixirRegenRate: 1, // elixir per second
+  startingElixir: 5,
+  unitBaseY: 120,
+  towerHP: 1500,
+  matchSeconds: 180
+}
+
+/* ------------------ Unit & card definitions ------------------ */
+const UNIT_TYPES = {
+  Knight: {hp: 220, dmg: 45, speed: 0.7, range: 24, cost: 3, size:56}, // melee
+  Archer: {hp: 120, dmg: 25, speed: 0.95, range: 160, cost: 3, size:48, projectile:true},
+  Giant:  {hp: 600, dmg: 55, speed: 0.45, range: 28, cost: 5, size:76, targetBuildings:true},
+  Goblin: {hp: 80, dmg: 28, speed: 1.2, range: 24, cost: 2, size:42}
+}
+
+/* ------------------ State ------------------ */
+let state = {
+  elixir: CONFIG.startingElixir,
+  timeLeft: CONFIG.matchSeconds,
+  units: [], // each unit: {id,side,x,hp,type,aiTargeting?}
+  leftTowerHp: CONFIG.towerHP,
+  rightTowerHp: CONFIG.towerHP,
+  selectedCard: null,
+  running: true,
+  lastTick: performance.now(),
+  nextUnitId: 1
+}
+
+/* ------------------ DOM refs ------------------ */
+const board = document.getElementById('board')
+const unitsContainer = document.getElementById('unitsContainer')
+const cardsNode = document.getElementById('cards')
+const elixirText = document.getElementById('elixirText')
+const elixirBarFill = document.getElementById('elixirBarFill')
+const leftHp = document.getElementById('leftHp')
+const rightHp = document.getElementById('rightHp')
+const timerNode = document.getElementById('timer')
+const logNode = document.getElementById('log')
+const restartBtn = document.getElementById('restartBtn')
+
+/* ------------------ Cards (player deck) ------------------ */
+const PLAYER_CARDS = ['Knight','Archer','Giant','Goblin']
+
+function log(text){
+  const el = document.createElement('div'); el.textContent = text;
+  logNode.prepend(el)
+}
+
+/* ------------------ Helpers ------------------ */
+function formatTime(sec){
+  const m = Math.floor(sec/60).toString().padStart(1,'0')
+  const s = Math.floor(sec%60).toString().padStart(2,'0')
+  return `${m}:${s}`
+}
+
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)) }
+
+/* ------------------ Rendering ------------------ */
+function renderCards(){
+  cardsNode.innerHTML = ''
+  PLAYER_CARDS.forEach(name=>{
+    const t = UNIT_TYPES[name]
+    const card = document.createElement('div')
+    card.className = 'card center'
+    card.innerHTML = `<div style="font-weight:800">${name}</div><div class="muted">Cost ${t.cost}</div>`
+    if (state.elixir < t.cost) card.classList.add('disabled')
+    card.onclick = ()=> {
+      if (state.elixir < t.cost) return
+      state.selectedCard = name
+      document.querySelectorAll('.card').forEach(c=>c.style.outline='none')
+      card.style.outline = '2px solid rgba(97,218,251,.18)'
+    }
+    cardsNode.appendChild(card)
+  })
+}
+
+function renderTowers(){
+  leftHp.textContent = `HP ${Math.round(state.leftTowerHp)}`
+  rightHp.textContent = `HP ${Math.round(state.rightTowerHp)}`
+}
+
+function renderUnits(){
+  unitsContainer.innerHTML = ''
+  state.units.forEach(u=>{
+    const el = document.createElement('div')
+    el.className = 'unit '+(u.side==='player'?'ally':'enemy')
+    el.style.width = u.size + 'px'
+    el.style.height = u.size + 'px'
+    el.style.left = (u.x - u.size/2) + 'px'
+    el.style.bottom = CONFIG.unitBaseY + 'px'
+    el.dataset.id = u.id
+    el.innerHTML = `<div style="font-size:12px">${u.typeName[0]}</div>
+      <div class="hpbar" style="width:${u.size}px;bottom:${u.size+6}px;position:absolute">
+        <i style="width:${(u.hp/u.maxHp*100)}%"></i>
+      </div>`
+    unitsContainer.appendChild(el)
+  })
+}
+
+/* ------------------ Game logic ------------------ */
+function spawnUnit(side,typeName,x){
+  const def = UNIT_TYPES[typeName]
+  const u = {
+    id: state.nextUnitId++,
+    side, typeName,
+    x, size:def.size,
+    hp: def.hp, maxHp:def.hp, dmg:def.dmg, speed:def.speed, range:def.range,
+    targetBuildings: !!def.targetBuildings, projectile: !!def.projectile
+  }
+  state.units.push(u)
+  return u
+}
+
+function updatePhysics(dt){
+  // move units toward enemy tower / targets
+  state.units.forEach(u=>{
+    if (u.hp<=0) return
+    // find nearest enemy unit within path
+    const enemies = state.units.filter(o=>o.side !== u.side && o.hp>0)
+    let target = null
+    // prefer nearest by absolute distance on x
+    if (enemies.length){
+      let best = Infinity
+      enemies.forEach(e=>{
+        const dist = Math.abs(e.x - u.x)
+        if (dist < best) { best = dist; target = e }
+      })
+    }
+    // if a unit targets buildings (Giant), or no unit target, consider towers
+    const enemyTowerX = (u.side==='player') ? board.clientWidth - 80 : 80
+    const towerDist = Math.abs(enemyTowerX - u.x)
+    // decide whether to move or attack
+    if (target && Math.abs(target.x - u.x) <= u.range){
+      // attack target
+      attackUnit(u, target, dt)
+    } else if (towerDist <= u.range && (u.targetBuildings || !target)){
+      // attack tower
+      attackTower(u, dt)
+    } else {
+      // move toward enemy side
+      const dir = (u.side==='player') ? 1 : -1
+      u.x += dir * u.speed * dt * 0.06 // tuned
+      // clamp to board edges
+      u.x = clamp(u.x, 30, board.clientWidth - 30)
+    }
+  })
+
+  // cleanup dead units
+  state.units = state.units.filter(u=>{
+    if (u.hp <= 0){
+      log(`${u.typeName} (${u.side}) died`)
+      return false
+    }
+    return true
+  })
+}
+
+/* attack functions with precise arithmetic */
+function attackUnit(attacker, target, dt){
+  attacker._attackTimer = (attacker._attackTimer || 0) + dt
+  const attackInterval = 900 // ms between hits
+  if (attacker._attackTimer >= attackInterval){
+    attacker._attackTimer = 0
+    // damage calculation: damage minus small defense factor (simple)
+    const damage = Math.max(1, Math.round(attacker.dmg))
+    target.hp -= damage
+    log(`${attacker.typeName} hits ${target.typeName} for ${damage}`)
+  }
+}
+
+function attackTower(attacker, dt){
+  attacker._attackTimer = (attacker._attackTimer || 0) + dt
+  const attackInterval = 900
+  if (attacker._attackTimer >= attackInterval){
+    attacker._attackTimer = 0
+    const dmg = Math.max(1, Math.round(attacker.dmg))
+    if (attacker.side === 'player'){
+      state.rightTowerHp -= dmg
+      log(`${attacker.typeName} hits ENEMY TOWER for ${dmg}`)
+    } else {
+      state.leftTowerHp -= dmg
+      log(`${attacker.typeName} hits ALLY TOWER for ${dmg}`)
+    }
+  }
+}
+
+/* ------------------ Inputs ------------------ */
+board.onclick = (e)=>{
+  if (!state.selectedCard) return
+  // compute relative x where to deploy (limit to your half)
+  const rect = board.getBoundingClientRect()
+  const x = e.clientX - rect.left
+  // players can only deploy on their half
+  if (x > rect.width / 2) {
+    log('You can only deploy on your side of the arena')
+    return
+  }
+  const cardName = state.selectedCard
+  const cost = UNIT_TYPES[cardName].cost
+  if (state.elixir < cost) { log('Not enough elixir'); state.selectedCard = null; renderCards(); return }
+  state.elixir -= cost
+  const spawnX = clamp(x, 40, rect.width/2 - 30)
+  spawnUnit('player', cardName, spawnX)
+  state.selectedCard = null
+  renderCards()
+}
+
+/* ------------------ AI (very simple) ------------------ */
+let aiTimer = 0
+function aiBehavior(dt){
+  aiTimer += dt
+  // every 1.2s evaluate
+  if (aiTimer < 1200) return
+  aiTimer = 0
+  // choose a playable card randomly (weighted)
+  const available = Object.keys(UNIT_TYPES).filter(n=>UNIT_TYPES[n].cost <= Math.floor(state.elixir))
+  if (available.length === 0) return
+  // AI spends elixir as well (simulate symmetric elixir)
+  // simplest AI: pick a random card and deploy on its side
+  const pick = available[Math.floor(Math.random()*available.length)]
+  // deduct elixir for AI
+  state.elixir -= UNIT_TYPES[pick].cost * 0.9 // AI slightly more efficient (ease difficulty)
+  // spawn near enemy side
+  const rect = board.getBoundingClientRect()
+  const spawnX = clamp(rect.width - (50 + Math.random()*200), rect.width/2 + 40, rect.width - 40)
+  spawnUnit('enemy', pick, spawnX)
+  log(`ENEMY deploys ${pick}`)
+}
+
+/* ------------------ Core loop ------------------ */
+function gameTick(now){
+  if (!state.running) return
+  const dt = now - state.lastTick
+  state.lastTick = now
+
+  // elixir regen
+  state.elixir += CONFIG.elixirRegenRate * (dt/1000)
+  state.elixir = clamp(state.elixir, 0, CONFIG.elixirMax)
+
+  // time
+  state.timeLeft -= dt/1000
+  if (state.timeLeft <= 0){
+    endMatch('time')
+    return
+  }
+
+  // AI
+  aiBehavior(dt)
+
+  // units physics & combat
+  updatePhysics(dt)
+
+  // check towers
+  if (state.rightTowerHp <= 0) { endMatch('player') ; return }
+  if (state.leftTowerHp <= 0) { endMatch('enemy') ; return }
+
+  // render
+  renderCards()
+  renderUnits()
+  renderTowers()
+  updateUI()
+
+  requestAnimationFrame(gameTick)
+}
+
+/* ------------------ UI updates ------------------ */
+function updateUI(){
+  elixirText.textContent = `${Math.floor(state.elixir)} / ${CONFIG.elixirMax}`
+  elixirBarFill.style.width = `${(state.elixir / CONFIG.elixirMax) * 100}%`
+  timerNode.textContent = formatTime(state.timeLeft)
+}
+
+/* ------------------ End match ------------------ */
+function endMatch(winner){
+  state.running = false
+  if (winner === 'player') {
+    log('YOU WIN! Enemy tower destroyed.')
+    alert('YOU WIN!')
+  } else if (winner === 'enemy') {
+    log('YOU LOSE! Your tower destroyed.')
+    alert('YOU LOSE!')
+  } else {
+    // time up: compare tower HP
+    const left = state.leftTowerHp, right = state.rightTowerHp
+    if (left > right) { log('Time up — You win by tower HP'); alert('Time up — YOU WIN!') }
+    else if (right > left) { log('Time up — You lose by tower HP'); alert('Time up — YOU LOSE!') }
+    else { log('Time up — Draw'); alert('DRAW') }
+  }
+}
+
+/* ------------------ Restart ------------------ */
+restartBtn.onclick = ()=>{ location.reload() }
+
+/* ------------------ Boot the game ------------------ */
+function start(){
+  // set initial units spawn positions (empty)
+  const rect = board.getBoundingClientRect()
+  state.elixir = CONFIG.startingElixir
+  state.timeLeft = CONFIG.matchSeconds
+  state.leftTowerHp = CONFIG.towerHP
+  state.rightTowerHp = CONFIG.towerHP
+  state.units = []
+  state.running = true
+  state.lastTick = performance.now()
+  state.nextUnitId = 1
+  log('Match started — Good luck!')
+  requestAnimationFrame(gameTick)
+  renderCards()
+  updateUI()
+}
+
+start()
+</script>
+</body>
+</html>
